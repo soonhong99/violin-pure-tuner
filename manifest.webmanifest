@@ -1,0 +1,9 @@
+{
+  "name": "Violin Pure Tuner",
+  "short_name": "ViolinTuner",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fffaf1",
+  "theme_color": "#256d70",
+  "icons": []
+}
