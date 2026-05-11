@@ -180,6 +180,15 @@ button {
   font-size: 30px;
 }
 
+.status {
+  min-height: 22px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .strings {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -237,7 +246,8 @@ button {
 }
 
 .controls label,
-.bpmRow {
+.bpmRow,
+.tempoPicker {
   display: flex;
   justify-content: space-between;
   gap: 14px;
@@ -247,7 +257,8 @@ button {
 }
 
 .controls input,
-.controls select {
+.controls select,
+.tempoPicker select {
   min-width: 172px;
   max-width: 220px;
   border: 1px solid var(--line);
@@ -272,8 +283,12 @@ button {
   font-size: 22px;
 }
 
+.tempoPicker {
+  margin-top: 16px;
+}
+
 .bpmRow {
-  margin-top: 18px;
+  margin-top: 12px;
 }
 
 .bpmRow input {
@@ -332,6 +347,7 @@ button {
   .metroTop,
   .readout,
   .controls label,
+  .tempoPicker,
   .bpmRow {
     align-items: stretch;
     flex-direction: column;

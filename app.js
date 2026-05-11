@@ -24,6 +24,8 @@ let inputBuffer;
 let selected = "A4";
 let metroTimer = null;
 let beat = 0;
+let isListening = false;
+const recentFreqs = [];
 
 function ensureAudioContext() {
   if (!audioContext) {
@@ -60,6 +62,15 @@ function updateTempoName() {
   $("tempoName").textContent = tempos.find((tempo) => bpm <= tempo.max).name;
 }
 
+function setBpm(value) {
+  $("bpm").value = value;
+  updateTempoName();
+  if (metroTimer) {
+    stopMetro();
+    startMetro();
+  }
+}
+
 function updateStringLabels() {
   document.querySelectorAll("[data-string]").forEach((button) => {
     const key = button.dataset.string;
@@ -91,52 +102,70 @@ function playTone(freq = targetFreq(selected), duration = 1.6) {
   oscillator.stop(now + duration + 0.04);
 }
 
-function yin(buffer, sampleRate) {
-  const threshold = 0.12;
-  const tauMax = Math.floor(sampleRate / 70);
-  const tauMin = Math.floor(sampleRate / 1200);
+function nearestToTarget(freq) {
+  const target = targetFreq(selected);
+  const candidates = [freq, freq / 2, freq * 2].filter((value) => value >= 70 && value <= 1200);
+  return candidates.reduce((best, value) => {
+    const bestDistance = Math.abs(1200 * Math.log2(best / target));
+    const valueDistance = Math.abs(1200 * Math.log2(value / target));
+    return valueDistance < bestDistance ? value : best;
+  }, candidates[0] ?? freq);
+}
+
+function smoothFreq(freq) {
+  recentFreqs.push(freq);
+  if (recentFreqs.length > 5) recentFreqs.shift();
+  return [...recentFreqs].sort((a, b) => a - b)[Math.floor(recentFreqs.length / 2)];
+}
+
+function detectPitch(buffer, sampleRate) {
+  const minFreq = 70;
+  const maxFreq = 1200;
+  const tauMax = Math.floor(sampleRate / minFreq);
+  const tauMin = Math.floor(sampleRate / maxFreq);
+  const size = Math.min(buffer.length, tauMax * 2);
   let rms = 0;
 
-  for (const value of buffer) rms += value * value;
-  rms = Math.sqrt(rms / buffer.length);
-  if (rms < Number.parseFloat($("sensitivity").value)) return null;
+  for (let i = 0; i < size; i += 1) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / size);
+  if (rms < Number.parseFloat($("sensitivity").value)) {
+    return { freq: null, rms, clarity: 0, reason: "소리가 작아요. 아이폰을 브릿지에서 30-50cm 정도 두고 한 줄만 길게 켜주세요." };
+  }
 
-  const values = new Float32Array(tauMax);
-  for (let tau = 1; tau < tauMax; tau += 1) {
-    let sum = 0;
-    for (let i = 0; i < tauMax; i += 1) {
-      const delta = buffer[i] - buffer[i + tau];
-      sum += delta * delta;
+  let bestTau = -1;
+  let bestCorrelation = 0;
+  for (let tau = tauMin; tau <= tauMax; tau += 1) {
+    let correlation = 0;
+    let leftEnergy = 0;
+    let rightEnergy = 0;
+    const limit = size - tau;
+    for (let i = 0; i < limit; i += 1) {
+      const left = buffer[i];
+      const right = buffer[i + tau];
+      correlation += left * right;
+      leftEnergy += left * left;
+      rightEnergy += right * right;
     }
-    values[tau] = sum;
-  }
-
-  let running = 0;
-  values[0] = 1;
-  for (let tau = 1; tau < tauMax; tau += 1) {
-    running += values[tau];
-    values[tau] *= tau / running;
-  }
-
-  let tau;
-  for (tau = tauMin; tau < tauMax; tau += 1) {
-    if (values[tau] < threshold) {
-      while (tau + 1 < tauMax && values[tau + 1] < values[tau]) tau += 1;
-      break;
+    const normalized = correlation / Math.sqrt(leftEnergy * rightEnergy || 1);
+    if (normalized > bestCorrelation) {
+      bestCorrelation = normalized;
+      bestTau = tau;
     }
   }
-  if (tau === tauMax) return null;
 
-  const betterTau =
-    tau > 1 && tau + 1 < tauMax
-      ? tau + (values[tau - 1] - values[tau + 1]) / (2 * (2 * values[tau] - values[tau - 1] - values[tau + 1]))
-      : tau;
-  return sampleRate / betterTau;
+  if (bestTau < 0 || bestCorrelation < 0.45) {
+    return { freq: null, rms, clarity: bestCorrelation, reason: "음이 흔들리거나 주변 소음이 큽니다. 한 줄만 일정하게 켜주세요." };
+  }
+
+  const rawFreq = sampleRate / bestTau;
+  const corrected = nearestToTarget(rawFreq);
+  return { freq: smoothFreq(corrected), rms, clarity: bestCorrelation, reason: "" };
 }
 
 function tick() {
   analyser.getFloatTimeDomainData(inputBuffer);
-  const freq = yin(inputBuffer, audioContext.sampleRate);
+  const result = detectPitch(inputBuffer, audioContext.sampleRate);
+  const freq = result.freq;
   if (freq) {
     const target = targetFreq(selected);
     const cents = 1200 * Math.log2(freq / target);
@@ -144,26 +173,36 @@ function tick() {
     $("freq").textContent = `${freq.toFixed(2)} Hz`;
     $("cents").textContent = `${cents > 0 ? "+" : ""}${cents.toFixed(1)} cents`;
     $("needle").style.transform = `translateX(-50%) translateX(${Math.max(-50, Math.min(50, cents)) * 3}px)`;
+    $("micStatus").textContent = `입력 감지됨 · 안정도 ${(result.clarity * 100).toFixed(0)}%`;
     updateTarget();
+  } else if (result.reason) {
+    $("micStatus").textContent = result.reason;
   }
   requestAnimationFrame(tick);
 }
 
 async function startMic() {
-  const ctx = ensureAudioContext();
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    },
-  });
-  analyser = ctx.createAnalyser();
-  analyser.fftSize = 4096;
-  inputBuffer = new Float32Array(analyser.fftSize);
-  ctx.createMediaStreamSource(stream).connect(analyser);
-  tick();
-  $("startBtn").textContent = "측정 중";
+  try {
+    if (isListening) return;
+    const ctx = ensureAudioContext();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    });
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 8192;
+    inputBuffer = new Float32Array(analyser.fftSize);
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    isListening = true;
+    tick();
+    $("startBtn").textContent = "측정 중";
+    $("micStatus").textContent = "마이크가 켜졌습니다. 선택한 줄을 길게 켜주세요.";
+  } catch (error) {
+    $("micStatus").textContent = "마이크 권한을 허용해야 조율할 수 있습니다. Safari 주소창 설정에서 마이크 허용을 확인해주세요.";
+  }
 }
 
 function startMetro() {
@@ -193,11 +232,11 @@ function stopMetro() {
 }
 
 $("startBtn").addEventListener("click", startMic);
-$("toneBtn").addEventListener("click", () => playTone());
 
 document.querySelectorAll("[data-string]").forEach((button) => {
   button.addEventListener("click", () => {
     selected = button.dataset.string;
+    recentFreqs.length = 0;
     updateTarget();
     playTone();
   });
@@ -212,6 +251,7 @@ $("bpm").addEventListener("input", () => {
     startMetro();
   }
 });
+$("tempoPreset").addEventListener("change", () => setBpm($("tempoPreset").value));
 $("metroBtn").addEventListener("click", () => {
   if (metroTimer) stopMetro();
   else startMetro();

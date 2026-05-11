@@ -16,7 +16,7 @@
     <div>
       <p class="eyebrow">Violin Pure Tuner</p>
       <h1>바이올린 조율기</h1>
-      <p class="sub">순정 5도 기준 튜너, 기준음 듣기, 메트로놈을 한 화면에 담았습니다.</p>
+      <p class="sub">순정 5도 기준 튜너와 메트로놈을 한 화면에 담았습니다.</p>
     </div>
     <button id="startBtn" class="primary">마이크 시작</button>
   </section>
@@ -27,7 +27,6 @@
         <div id="noteName">--</div>
         <div id="freq">0.00 Hz</div>
       </div>
-      <button id="toneBtn" class="ghost">기준음 듣기</button>
     </div>
     <div class="scale" aria-label="cent meter">
       <span>-50</span>
@@ -39,6 +38,7 @@
       <strong id="cents">-- cents</strong>
       <span id="target">A4 기준: 440.00 Hz</span>
     </div>
+    <p id="micStatus" class="status">마이크 시작 후 한 줄만 길게 켜면 Hz가 표시됩니다.</p>
   </section>
 
   <section class="strings" aria-label="바이올린 줄 선택">
@@ -70,7 +70,7 @@
     </label>
     <label>
       <span>감도</span>
-      <input id="sensitivity" type="range" min="0.005" max="0.08" step="0.001" value="0.018">
+      <input id="sensitivity" type="range" min="0.003" max="0.08" step="0.001" value="0.008">
     </label>
   </section>
 
@@ -82,6 +82,19 @@
       </div>
       <button id="metroBtn" class="primary">시작</button>
     </div>
+    <label class="tempoPicker">
+      <span>빠르기말</span>
+      <select id="tempoPreset">
+        <option value="40">Grave · 40</option>
+        <option value="52">Largo · 52</option>
+        <option value="72" selected>Adagio · 72</option>
+        <option value="84">Andante · 84</option>
+        <option value="112">Moderato · 112</option>
+        <option value="132">Allegro · 132</option>
+        <option value="164">Vivace · 164</option>
+        <option value="184">Presto · 184</option>
+      </select>
+    </label>
     <label class="bpmRow">
       <span>BPM <b id="bpmText">72</b></span>
       <input id="bpm" type="range" min="40" max="208" value="72">
