@@ -1,1 +1,1 @@
-self.addEventListener("install",e=>e.waitUntil(caches.open("v7").then(c=>c.addAll(["./","index.html","style.css?v=6","app.js?v=6","manifest.webmanifest"]))));self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+self.addEventListener("install",e=>e.waitUntil(caches.open("v8").then(c=>c.addAll(["./","index.html","style.css?v=8","app.js?v=8","manifest.webmanifest"]))));self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));

@@ -21,6 +21,8 @@ const tempos = [
 let audioContext;
 let analyser;
 let inputBuffer;
+let micStream;
+let animationFrameId;
 let selected = "A4";
 let metroTimer = null;
 let beat = 0;
@@ -163,6 +165,7 @@ function detectPitch(buffer, sampleRate) {
 }
 
 function tick() {
+  if (!isListening) return;
   analyser.getFloatTimeDomainData(inputBuffer);
   const result = detectPitch(inputBuffer, audioContext.sampleRate);
   const freq = result.freq;
@@ -178,7 +181,7 @@ function tick() {
   } else if (result.reason) {
     $("micStatus").textContent = result.reason;
   }
-  requestAnimationFrame(tick);
+  animationFrameId = requestAnimationFrame(tick);
 }
 
 async function startMic() {
@@ -195,14 +198,38 @@ async function startMic() {
     analyser = ctx.createAnalyser();
     analyser.fftSize = 8192;
     inputBuffer = new Float32Array(analyser.fftSize);
+    micStream = stream;
     ctx.createMediaStreamSource(stream).connect(analyser);
     isListening = true;
     tick();
     $("startBtn").textContent = "측정 중";
+    $("startBtn").disabled = true;
+    $("stopBtn").disabled = false;
     $("micStatus").textContent = "마이크가 켜졌습니다. 선택한 줄을 길게 켜주세요.";
   } catch (error) {
     $("micStatus").textContent = "마이크 권한을 허용해야 조율할 수 있습니다. Safari 주소창 설정에서 마이크 허용을 확인해주세요.";
   }
+}
+
+function stopMic() {
+  isListening = false;
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  animationFrameId = undefined;
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = undefined;
+  }
+  analyser = undefined;
+  inputBuffer = undefined;
+  recentFreqs.length = 0;
+  $("startBtn").textContent = "마이크 시작";
+  $("startBtn").disabled = false;
+  $("stopBtn").disabled = true;
+  $("noteName").textContent = "--";
+  $("freq").textContent = "0.00 Hz";
+  $("cents").textContent = "-- cents";
+  $("needle").style.transform = "translateX(-50%)";
+  $("micStatus").textContent = "마이크가 꺼졌습니다.";
 }
 
 function startMetro() {
@@ -232,6 +259,7 @@ function stopMetro() {
 }
 
 $("startBtn").addEventListener("click", startMic);
+$("stopBtn").addEventListener("click", stopMic);
 
 document.querySelectorAll("[data-string]").forEach((button) => {
   button.addEventListener("click", () => {
